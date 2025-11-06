@@ -158,7 +158,7 @@ function App() {
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex justify-between items-center mb-4">
             <div className="text-gray-300">
-              © 2024 DNS Zone Visualizer <span className="text-xs ml-2 bg-gradient-to-r from-blue-600/30 to-cyan-600/30 border border-cyan-500/30 px-3 py-1 rounded-full font-semibold text-cyan-300">v{APP_VERSION}</span>
+              © 2025 DNS Zone Visualizer <span className="text-xs ml-2 bg-gradient-to-r from-blue-600/30 to-cyan-600/30 border border-cyan-500/30 px-3 py-1 rounded-full font-semibold text-cyan-300">v{APP_VERSION}</span>
             </div>
             <div className="flex items-center gap-4">
               <a 

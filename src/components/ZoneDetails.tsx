@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, Server, ExternalLink } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { X, Server, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface ZoneDetailsProps {
   zone: {
@@ -13,39 +13,135 @@ interface ZoneDetailsProps {
 }
 
 const ZoneDetails: React.FC<ZoneDetailsProps> = ({ zone, onClose }) => {
+  const [zoom, setZoom] = useState(100);
+  const [position, setPosition] = useState({ x: window.innerWidth - 400 - 16, y: 16 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -5 : 5;
+      setZoom(prev => Math.max(50, Math.min(150, prev + delta)));
+    }
+  }, []);
+
+  const zoomIn = useCallback(() => {
+    setZoom(prev => Math.min(150, prev + 10));
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    setZoom(prev => Math.max(50, prev - 10));
+  }, []);
+
+  const resetZoom = useCallback(() => {
+    setZoom(100);
+  }, []);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    setIsDragging(true);
+    setDragOffset({
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    });
+  }, [position]);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDragging) return;
+    
+    setPosition({
+      x: e.clientX - dragOffset.x,
+      y: e.clientY - dragOffset.y
+    });
+  }, [isDragging, dragOffset]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  React.useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp]);
+
   if (!zone) return null;
 
   return (
-    <div className="fixed right-4 top-4 w-96 bg-gradient-to-br from-gray-800/95 to-gray-900/95 backdrop-blur-lg rounded-2xl shadow-2xl border border-gray-600/50 p-5 animate-in slide-in-from-right duration-300">
-      <div className="flex justify-between items-center mb-5">
-        <h3 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">Zone Details</h3>
+    <div 
+      className="fixed w-96 bg-gradient-to-br from-gray-800/95 to-gray-900/95 backdrop-blur-lg rounded-2xl shadow-2xl border border-gray-600/50 flex flex-col max-h-[calc(100vh-180px)] z-50"
+      onWheel={handleWheel}
+      style={{ 
+        transform: `scale(${zoom / 100})`,
+        transformOrigin: 'top left',
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        cursor: isDragging ? 'grabbing' : 'default'
+      }}
+    >
+      <div 
+        className="flex justify-between items-center px-4 py-3 flex-shrink-0 cursor-grab active:cursor-grabbing"
+        onMouseDown={handleMouseDown}
+      >
+        <div className="flex items-center gap-2">
+          <h3 className="text-lg font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">Zone Details</h3>
+          <div className="flex items-center gap-0.5 bg-gray-700/50 rounded-lg px-1.5 py-0.5" onMouseDown={(e) => e.stopPropagation()}>
+            <button
+              onClick={zoomOut}
+              className="p-0.5 hover:bg-gray-600/50 rounded text-gray-400 hover:text-cyan-400 transition-all"
+              title="Zoom out (Ctrl/Cmd + scroll)"
+            >
+              <ZoomOut className="w-3 h-3" />
+            </button>
+            <button
+              onClick={resetZoom}
+              className="px-1.5 py-0.5 text-[10px] text-gray-400 hover:text-cyan-400 transition-colors font-mono"
+              title="Reset zoom"
+            >
+              {zoom}%
+            </button>
+            <button
+              onClick={zoomIn}
+              className="p-0.5 hover:bg-gray-600/50 rounded text-gray-400 hover:text-cyan-400 transition-all"
+              title="Zoom in (Ctrl/Cmd + scroll)"
+            >
+              <ZoomIn className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
         <button 
           onClick={onClose}
-          className="p-2 hover:bg-gray-700/50 rounded-lg text-gray-400 hover:text-cyan-400 transition-all duration-200 hover:scale-110"
+          onMouseDown={(e) => e.stopPropagation()}
+          className="p-1.5 hover:bg-gray-700/50 rounded-lg text-gray-400 hover:text-cyan-400 transition-all duration-200 hover:scale-110"
         >
-          <X className="w-5 h-5" />
+          <X className="w-4 h-4" />
         </button>
       </div>
 
-      <div className="space-y-5">
+      <div className="space-y-3 overflow-y-auto px-4 pb-4 flex-1 scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800/50">
         <div>
-          <h4 className="font-semibold mb-2 text-cyan-300 text-sm uppercase tracking-wide">Zone</h4>
-          <p className="text-sm bg-gray-900/60 p-3 rounded-lg text-white font-medium border border-gray-700/50">{zone.zone}</p>
+          <h4 className="font-semibold mb-1.5 text-cyan-300 text-xs uppercase tracking-wide">Zone</h4>
+          <p className="text-xs bg-gray-900/60 p-2 rounded-lg text-white font-medium border border-gray-700/50">{zone.zone}</p>
         </div>
 
         <div>
-          <h4 className="font-semibold mb-3 text-cyan-300 text-sm uppercase tracking-wide">Domains in this zone</h4>
-          <ul className="text-sm space-y-2">
+          <h4 className="font-semibold mb-1.5 text-cyan-300 text-xs uppercase tracking-wide">Domains in this zone</h4>
+          <ul className="text-xs space-y-1.5">
             {zone.domains.map((domain, idx) => (
               <li key={idx}>
-                <div className="bg-gray-900/60 p-3 rounded-lg text-white border border-gray-700/50 hover:border-cyan-500/30 transition-colors duration-200">
+                <div className="bg-gray-900/60 p-2 rounded-lg text-white border border-gray-700/50 hover:border-cyan-500/30 transition-colors duration-200">
                   {domain}
                   {zone.isCname && domain !== zone.zone && (
-                    <div className="mt-2 flex flex-col space-y-1">
-                      <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-purple-500/40">
-                        <span className="text-purple-300 text-xs font-semibold">CNAME</span>
-                        <span className="text-purple-400 text-xs">→</span>
-                        <span className="text-purple-300 text-[11px] font-medium truncate">{zone.cnameTarget}</span>
+                    <div className="mt-1.5 flex flex-col space-y-1">
+                      <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-purple-500/40">
+                        <span className="text-purple-300 text-[10px] font-semibold">CNAME</span>
+                        <span className="text-purple-400 text-[10px]">→</span>
+                        <span className="text-purple-300 text-[10px] font-medium truncate">{zone.cnameTarget}</span>
                       </div>
                     </div>
                   )}
@@ -56,12 +152,12 @@ const ZoneDetails: React.FC<ZoneDetailsProps> = ({ zone, onClose }) => {
         </div>
 
         <div>
-          <h4 className="font-semibold mb-3 text-cyan-300 text-sm uppercase tracking-wide">Nameservers</h4>
-          <ul className="text-sm space-y-2">
+          <h4 className="font-semibold mb-1.5 text-cyan-300 text-xs uppercase tracking-wide">Nameservers</h4>
+          <ul className="text-xs space-y-1.5">
             {zone.nameservers.map((ns, idx) => (
-              <li key={idx} className="bg-gray-900/60 p-3 rounded-lg text-white flex items-center gap-3 border border-gray-700/50 hover:border-cyan-500/30 transition-colors duration-200">
-                <div className="p-1.5 bg-cyan-500/10 rounded-lg">
-                  <Server className="w-4 h-4 text-cyan-400" />
+              <li key={idx} className="bg-gray-900/60 p-2 rounded-lg text-white flex items-center gap-2 border border-gray-700/50 hover:border-cyan-500/30 transition-colors duration-200">
+                <div className="p-1 bg-cyan-500/10 rounded">
+                  <Server className="w-3 h-3 text-cyan-400" />
                 </div>
                 <span>{ns}</span>
               </li>
