@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import ReactFlow, { 
   Background, 
   Controls,
@@ -24,7 +24,13 @@ function App() {
   const [domain, setDomain] = useState('');
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
-  const [selectedZone, setSelectedZone] = useState<any>(null);
+  const [selectedZone, setSelectedZone] = useState<{
+    zone: string;
+    domains: string[];
+    nameservers: string[];
+    isCname?: boolean;
+    cnameTarget?: string;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

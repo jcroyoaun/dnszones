@@ -1,5 +1,6 @@
 import { getPublicSuffixList } from './publicSuffix';
 import type { DnsResponse } from '../types/dns';
+import type { Node, Edge } from 'reactflow';
 
 const DNS_ENDPOINT = 'https://cloudflare-dns.com/dns-query';
 
@@ -103,8 +104,8 @@ export const buildZoneTree = async (queriedDomain: string) => {
     throw new Error(`Domain ${queriedDomain} does not exist`);
   }
 
-  const nodes: any[] = [];
-  const edges: any[] = [];
+  const nodes: Node[] = [];
+  const edges: Edge[] = [];
   const baseX = 400;
   const xOffset = -100;
   const yOffset = 120;
@@ -175,7 +176,7 @@ export const buildZoneTree = async (queriedDomain: string) => {
 
       // Check for CNAME first
       const cnameInfo = await getCnameInfo(queriedDomain);
-      let domains = [domainZone];
+      const domains = [domainZone];
 
       // If the queried domain is different from the zone we found
       if (queriedDomain !== domainZone) {
