@@ -3,15 +3,49 @@
 @tailwind utilities;
 
 :root {
-  --zone-root: #312E81;
+  --zone-root: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   --zone-root-light: #E8E3FC;
   
-  --zone-tld: #075985;
+  --zone-tld: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
   --zone-tld-light: #E0F2FE;
   
-  --zone-domain: #065F46;
+  --zone-domain: linear-gradient(135deg, #10b981 0%, #059669 100%);
   --zone-domain-light: #DCF9E7;
   
-  --zone-subdomain: #831843;
+  --zone-subdomain: linear-gradient(135deg, #ec4899 0%, #d946ef 100%);
   --zone-subdomain-light: #FCE7F3;
+}
+
+@layer utilities {
+  .bg-zone-root {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  }
+  
+  .bg-zone-tld {
+    background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+  }
+  
+  .bg-zone-domain {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  }
+  
+  .bg-zone-subdomain {
+    background: linear-gradient(135deg, #ec4899 0%, #d946ef 100%);
+  }
+  
+  .border-zone-root-border {
+    border-color: #8b5cf6;
+  }
+  
+  .border-zone-tld-border {
+    border-color: #06b6d4;
+  }
+  
+  .border-zone-domain-border {
+    border-color: #10b981;
+  }
+  
+  .border-zone-subdomain-border {
+    border-color: #ec4899;
+  }
 }

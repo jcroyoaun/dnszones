@@ -18,7 +18,7 @@ const nodeTypes = {
   zoneNode: ZoneNode
 };
 
-const APP_VERSION = '0.0.1-beta';
+const APP_VERSION = '0.1.0';
 
 function App() {
   const [domain, setDomain] = useState('');
@@ -94,41 +94,43 @@ function App() {
   };
     
   return (
-    <div className="h-screen flex flex-col dark:bg-gray-900">
-      <div className="border-b border-gray-700 p-4 bg-gray-900">
+    <div className="h-screen flex flex-col bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
+      <div className="border-b border-gray-700/50 p-6 bg-gradient-to-r from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-sm shadow-2xl">
         <div className="max-w-2xl mx-auto text-center mb-6">
-          <h1 className="text-2xl font-bold text-white mb-2">DNS Zone Visualizer</h1>
-          <p className="text-gray-400 text-sm mb-2">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500 bg-clip-text text-transparent mb-3 tracking-tight">
+            DNS Zone Visualizer
+          </h1>
+          <p className="text-gray-300 text-base mb-2 font-medium">
             Enter a domain name to visualize its DNS zone hierarchy and delegation structure.
           </p>
           <p className="text-gray-400 text-sm">
-            Try domains like <span className="text-blue-400">example.com</span> or <span className="text-blue-400">subdomain.example.co.uk</span>
+            Try domains like <span className="text-cyan-400 font-semibold">example.com</span> or <span className="text-cyan-400 font-semibold">subdomain.example.co.uk</span>
           </p>
         </div>
         
-        <form onSubmit={handleSearch} className="max-w-2xl mx-auto flex gap-2">
+        <form onSubmit={handleSearch} className="max-w-2xl mx-auto flex gap-3">
           <input
             type="text"
             value={domain}
             onChange={(e) => setDomain(e.target.value)}
             placeholder="Enter domain (e.g., google.com, es.wikipedia.org)"
-            className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white placeholder-gray-400"
+            className="flex-1 px-5 py-3 bg-gray-800/80 border border-gray-600/50 rounded-xl focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 text-white placeholder-gray-400 transition-all duration-200 shadow-lg focus:shadow-cyan-500/20"
           />
           <button
             type="submit"
             disabled={loading}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50"
+            className="px-8 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-xl hover:from-blue-500 hover:to-cyan-500 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 transition-all duration-200 shadow-lg hover:shadow-cyan-500/30 hover:scale-105"
           >
             {loading ? 'Searching...' : 'Search'}
           </button>
         </form>
         {error && (
-          <div className="max-w-2xl mx-auto mt-2 text-red-400 text-sm">
+          <div className="max-w-2xl mx-auto mt-3 text-red-400 text-sm bg-red-900/20 border border-red-500/30 rounded-lg px-4 py-2">
             {error}
           </div>
         )}
       </div>
-      <div className="flex-1 bg-gray-900">
+      <div className="flex-1 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
         {(nodes.length > 0 || edges.length > 0) && (
           <ReactFlow
             nodes={nodes}
@@ -152,18 +154,18 @@ function App() {
           onClose={() => setSelectedZone(null)}
         />
       )}
-      <footer className="border-t border-gray-800 bg-gray-900 py-4">
+      <footer className="border-t border-gray-700/50 bg-gradient-to-r from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-sm py-6 shadow-2xl">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex justify-between items-center mb-4">
-            <div className="text-gray-400">
-              © 2024 DNS Zone Visualizer <span className="text-xs ml-2 bg-gray-800 px-2 py-1 rounded-full">v{APP_VERSION}</span>
+            <div className="text-gray-300">
+              © 2024 DNS Zone Visualizer <span className="text-xs ml-2 bg-gradient-to-r from-blue-600/30 to-cyan-600/30 border border-cyan-500/30 px-3 py-1 rounded-full font-semibold text-cyan-300">v{APP_VERSION}</span>
             </div>
             <div className="flex items-center gap-4">
               <a 
                 href="https://github.com/jcroyoaun" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-gray-400 hover:text-cyan-400 transition-all duration-200 hover:scale-110"
                 aria-label="GitHub"
               >
                 <Github className="w-5 h-5" />
@@ -172,16 +174,16 @@ function App() {
                 href="https://x.com/jcroyoaun" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-gray-400 hover:text-cyan-400 transition-all duration-200 hover:scale-110"
                 aria-label="Twitter"
               >
                 <Twitter className="w-5 h-5" />
               </a>
               <a 
-                href="https://jcroyoaun.io" 
+                href="https://jcroyoaun.com" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-gray-400 hover:text-cyan-400 transition-all duration-200 hover:scale-110"
                 aria-label="Website"
               >
                 <Globe className="w-5 h-5" />
@@ -196,7 +198,7 @@ function App() {
             <p className="text-gray-400">
               DNS zone relationships shown may occasionally be incomplete or inaccurate.
 
-              Found any issues? <a href="mailto:contact@dnszone.dev" className="text-blue-400 hover:text-blue-300 transition-colors">Let us know</a>.
+              Found any issues? <a href="mailto:contact@dnszone.dev" className="text-cyan-400 hover:text-cyan-300 transition-colors font-medium">Let us know</a>.
             </p>
           </div>
         </div>

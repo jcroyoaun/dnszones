@@ -43,32 +43,34 @@ const ZoneNode = memo(({ data }: {
 
   return (
     <div 
-      className={`px-6 py-4 shadow-lg rounded-lg border-2 transition-all duration-200 min-w-[200px] cursor-pointer
+      className={`px-6 py-4 shadow-2xl rounded-xl border-2 transition-all duration-300 min-w-[200px] cursor-pointer backdrop-blur-sm
         ${isHovered 
-          ? `${zoneClasses.bg} ${zoneClasses.border}` 
-          : 'bg-gray-800 border-gray-700'}`}
+          ? `${zoneClasses.bg} ${zoneClasses.border} scale-105 shadow-cyan-500/30` 
+          : 'bg-gray-800/90 border-gray-600/50 hover:border-gray-500/50'}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={() => data.onZoneClick(data.zone)}
     >
-      <Handle type="target" position={Position.Top} className="w-2 h-2 !bg-gray-600" />
+      <Handle type="target" position={Position.Top} className="w-3 h-3 !bg-cyan-500 !border-2 !border-gray-800" />
       <div className="flex items-center gap-3">
-        <Server className={`w-5 h-5 ${isHovered ? 'text-white' : 'text-gray-400'}`} />
+        <div className={`p-2 rounded-lg transition-all duration-300 ${isHovered ? 'bg-white/10' : 'bg-gray-700/50'}`}>
+          <Server className={`w-5 h-5 transition-colors duration-300 ${isHovered ? 'text-cyan-300' : 'text-gray-400'}`} />
+        </div>
         <div className="flex flex-col">
-          <div className="text-base font-bold text-white">
+          <div className={`text-base font-bold transition-colors duration-300 ${isHovered ? 'text-white' : 'text-gray-100'}`}>
             {apexDomain}
           </div>
           {subDomains.map((domain) => (
             <div 
               key={domain}
-              className="text-sm font-medium text-gray-400"
+              className={`text-sm font-medium transition-colors duration-300 ${isHovered ? 'text-gray-200' : 'text-gray-400'}`}
             >
               {domain}
             </div>
           ))}
         </div>
       </div>
-      <Handle type="source" position={Position.Bottom} className="w-2 h-2 !bg-gray-600" />
+      <Handle type="source" position={Position.Bottom} className="w-3 h-3 !bg-cyan-500 !border-2 !border-gray-800" />
     </div>
   );
 });
