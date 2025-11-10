@@ -3,16 +3,41 @@ import type { DnsResponse } from '../types/dns';
 import type { Node, Edge } from 'reactflow';
 
 const DNS_ENDPOINT = 'https://cloudflare-dns.com/dns-query';
+const FETCH_TIMEOUT = 10000; // 10 seconds
+
+const fetchWithTimeout = async (url: string, options: RequestInit, timeout: number): Promise<Response> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('DNS query timed out. Please try again.');
+    }
+    throw error;
+  }
+};
 
 const queryDns = async (domain: string, type: string): Promise<DnsResponse> => {
   const url = `${DNS_ENDPOINT}?name=${domain}&type=${type}`;
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       'Accept': 'application/dns-json'
     }
-  });
+  }, FETCH_TIMEOUT);
   const data = await response.json();
-  console.log(`DNS query for ${domain} (${type}):`, data);
+  
+  if (import.meta.env.DEV) {
+    console.log(`DNS query for ${domain} (${type}):`, data);
+  }
+  
   return data;
 };
 
