@@ -170,82 +170,118 @@ export const buildZoneTree = async (queriedDomain: string, resolverEndpoint: str
     });
 
     if (parts.length > (isSpecialTLD ? 2 : 1)) {
-      const domainToCheck = isSpecialTLD 
-        ? `${parts[parts.length - 3]}.${potentialPublicSuffix}`
-        : parts.slice(-2).join('.');
-
-      const { zoneName: domainZone, nameservers: domainNameservers } = await getZoneInfo(domainToCheck, resolverEndpoint);
-
-      // Check for CNAME first
-      const cnameInfo = await getCnameInfo(queriedDomain, resolverEndpoint);
-      const domains = [domainZone];
-
-      // If the queried domain is different from the zone we found
-      if (queriedDomain !== domainZone) {
-        if (cnameInfo.isCname) {
-          // If it's a CNAME, always add it to the parent zone
-          domains.push(queriedDomain);
-        } else {
-          // Only check for delegation if it's not a CNAME
-          const isDelegated = await isZoneDelegated(queriedDomain, domainZone, resolverEndpoint);
-
-          if (isDelegated) {
-            // Create a new node for the delegated zone
-            const { nameservers: subZoneNS } = await getZoneInfo(queriedDomain, resolverEndpoint);
-            const delegatedNode = {
-              id: queriedDomain,
-              data: {
-                label: queriedDomain,
-                zone: queriedDomain,
-                domains: [queriedDomain],
-                nameservers: subZoneNS,
-                depth: depth + 1,
-                isDelegated: true
-              },
-              position: { x: baseX + (xOffset * 3), y: yOffset * 3 },
-              type: 'zoneNode'
-            };
-            nodes.push(delegatedNode);
-            edges.push({
-              id: `e-${queriedDomain}-${domainZone}`,
-              source: domainZone,
-              target: queriedDomain,
-              type: 'smoothstep',
-              animated: true,
-              style: { stroke: '#4B5563', strokeWidth: 2 }
-            });
-          } else {
-            // Not delegated, just add it to the parent zone's domains
-            domains.push(queriedDomain);
+      // Walk through all possible zone boundaries from TLD upwards
+      let currentParent = tld;
+      let currentDepth = depth;
+      
+      // Start from the level right after TLD
+      const startIndex = isSpecialTLD ? parts.length - 3 : parts.length - 2;
+      
+      for (let i = startIndex; i >= 0; i--) {
+        const domainToCheck = parts.slice(i).join('.');
+        
+        try {
+          const { zoneName: checkZone, nameservers: checkNS } = await getZoneInfo(domainToCheck, resolverEndpoint);
+          
+          // Check if this domain has different nameservers than its parent (delegation)
+          const isDelegated = await isZoneDelegated(domainToCheck, currentParent, resolverEndpoint);
+          
+          if (isDelegated || i === startIndex) {
+            // This is a new zone
+            const domains = [checkZone];
+            
+            // Check if this is the queried domain
+            if (domainToCheck === queriedDomain) {
+              const cnameInfo = await getCnameInfo(queriedDomain, resolverEndpoint);
+              if (cnameInfo.isCname) {
+                domains.push(queriedDomain);
+              }
+              
+              const zoneNode = {
+                id: checkZone,
+                data: {
+                  label: checkZone,
+                  zone: checkZone,
+                  domains,
+                  nameservers: checkNS,
+                  depth: currentDepth,
+                  isDelegated: isDelegated && i !== startIndex,
+                  isCname: cnameInfo.isCname,
+                  cnameTarget: cnameInfo.target
+                },
+                position: { x: baseX + (xOffset * currentDepth), y: yOffset * currentDepth },
+                type: 'zoneNode'
+              };
+              
+              nodes.push(zoneNode);
+              edges.push({
+                id: `e-${checkZone}-${currentParent}`,
+                source: currentParent,
+                target: checkZone,
+                type: 'smoothstep',
+                animated: true,
+                style: { stroke: '#4B5563', strokeWidth: 2 }
+              });
+              
+              // We found the queried domain, we're done
+              break;
+            } else if (domainToCheck.endsWith(queriedDomain) === false && queriedDomain.endsWith(domainToCheck)) {
+              // This zone contains the queried domain, continue checking deeper levels
+              const zoneNode = {
+                id: checkZone,
+                data: {
+                  label: checkZone,
+                  zone: checkZone,
+                  domains,
+                  nameservers: checkNS,
+                  depth: currentDepth,
+                  isDelegated: isDelegated && i !== startIndex
+                },
+                position: { x: baseX + (xOffset * currentDepth), y: yOffset * currentDepth },
+                type: 'zoneNode'
+              };
+              
+              nodes.push(zoneNode);
+              edges.push({
+                id: `e-${checkZone}-${currentParent}`,
+                source: currentParent,
+                target: checkZone,
+                type: 'smoothstep',
+                animated: true,
+                style: { stroke: '#4B5563', strokeWidth: 2 }
+              });
+              
+              currentParent = checkZone;
+              currentDepth++;
+            }
+          } else if (i === 0) {
+            // This is the last level (queried domain) but not delegated - add to parent zone
+            const parentNode = nodes.find(n => n.id === currentParent);
+            if (parentNode && !parentNode.data.domains.includes(queriedDomain)) {
+              const cnameInfo = await getCnameInfo(queriedDomain, resolverEndpoint);
+              parentNode.data.domains.push(queriedDomain);
+              if (cnameInfo.isCname) {
+                parentNode.data.isCname = true;
+                parentNode.data.cnameTarget = cnameInfo.target;
+              }
+            }
+          }
+        } catch (error) {
+          // Domain doesn't exist as a zone, might be a subdomain
+          if (i === 0) {
+            // This is the queried domain but not a zone - add to parent
+            const parentNode = nodes.find(n => n.id === currentParent);
+            if (parentNode && !parentNode.data.domains.includes(queriedDomain)) {
+              const cnameInfo = await getCnameInfo(queriedDomain, resolverEndpoint);
+              parentNode.data.domains.push(queriedDomain);
+              if (cnameInfo.isCname) {
+                parentNode.data.isCname = true;
+                parentNode.data.cnameTarget = cnameInfo.target;
+              }
+            }
           }
         }
       }
-
-      const domainNode = {
-        id: domainZone,
-        data: {
-          label: domainZone,
-          zone: domainZone,
-          domains,
-          nameservers: domainNameservers,
-          depth: depth++,
-          // Include CNAME info when relevant
-          isCname: cnameInfo.isCname && domains.includes(queriedDomain),
-          cnameTarget: cnameInfo.isCname && domains.includes(queriedDomain) ? cnameInfo.target : undefined
-        },
-        position: { x: baseX + (xOffset * 2), y: yOffset * 2 },
-        type: 'zoneNode'
-      };
-
-      nodes.push(domainNode);
-      edges.push({
-        id: `e-${domainZone}-${tld}`,
-        source: tld,
-        target: domainZone,
-        type: 'smoothstep',
-        animated: true,
-        style: { stroke: '#4B5563', strokeWidth: 2 }
-      });
     }
 
   } catch (error) {
