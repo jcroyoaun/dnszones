@@ -1,4 +1,5 @@
-// This is a subset of the public suffix list focusing on common TLDs
+// This is a subset of the public suffix list focusing on common TLDs. 
+// I update this file manually when it changes. TODO - get a worker to fetch, update if needed (?)
 export const PUBLIC_SUFFIX_DATA = `
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this

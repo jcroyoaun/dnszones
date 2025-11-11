@@ -1,4 +1,3 @@
-// DNS client utility - handles the low-level DNS queries
 import { APP_CONFIG } from '../config/app';
 import { dnsRateLimiter, RateLimitError } from './rate-limiter';
 import type { DnsResponse } from '../types/dns';
@@ -32,7 +31,6 @@ export const queryDns = async (
   type: string,
   endpoint: string
 ): Promise<DnsResponse> => {
-  // Rate limiting check
   if (!dnsRateLimiter.canMakeQuery()) {
     const resetTimeMs = dnsRateLimiter.getResetTime();
     const resetSeconds = Math.ceil(resetTimeMs / 1000);
@@ -42,7 +40,6 @@ export const queryDns = async (
     );
   }
 
-  // Record the query
   dnsRateLimiter.recordQuery();
 
   const url = `${endpoint}?name=${domain}&type=${type}`;

@@ -3,6 +3,17 @@ import type { Node, Edge } from 'reactflow';
 import { DEFAULT_RESOLVER } from '../config/resolvers';
 import { queryDns } from './dns-client';
 
+export interface ZoneHierarchyData {
+  zoneName: string;
+  domains: string[];
+  nameservers: string[];
+  depth: number;
+  isDelegated: boolean;
+  isCname: boolean;
+  cnameTarget?: string;
+  children: ZoneHierarchyData[];
+}
+
 const getNameservers = async (domain: string, endpoint: string = DEFAULT_RESOLVER.endpoint): Promise<string[]> => {
   const nsResponse = await queryDns(domain, 'NS', endpoint);
   if (nsResponse.Answer && nsResponse.Answer.length > 0) {
@@ -52,13 +63,33 @@ const getZoneInfo = async (domain: string, endpoint: string = DEFAULT_RESOLVER.e
   if (soaResponse.Answer && soaResponse.Answer.length > 0) {
     const soaRecord = soaResponse.Answer.find(record => record.type === 6);
     if (soaRecord) {
+      // Found SOA in Answer - this domain IS a zone
       zoneName = soaRecord.name.toLowerCase().replace(/\.$/, '');
       const cleanDomain = domain.toLowerCase().replace(/\.$/, '');
       if (zoneName !== cleanDomain) {
         throw new Error(`Domain ${domain} does not exist`);
       }
     } else {
-      zoneName = domain.toLowerCase().replace(/\.$/, '');
+      // Answer exists but no SOA - might be a CNAME or other record
+      // Check Authority section for the actual zone SOA
+      if (soaResponse.Authority && soaResponse.Authority.length > 0) {
+        const authSoaRecord = soaResponse.Authority.find(record => record.type === 6);
+        if (authSoaRecord) {
+          const cleanAuthZone = authSoaRecord.name.toLowerCase().replace(/\.$/, '');
+          const cleanDomain = domain.toLowerCase().replace(/\.$/, '');
+          // If Authority SOA is for a different zone, this domain is NOT a zone
+          if (cleanAuthZone !== cleanDomain) {
+            throw new Error(`Domain ${domain} is not a zone, belongs to ${cleanAuthZone}`);
+          }
+          zoneName = cleanAuthZone;
+        } else {
+          // No SOA anywhere - not a valid zone
+          throw new Error(`Domain ${domain} does not have SOA record`);
+        }
+      } else {
+        // No Authority section either - not a zone
+        throw new Error(`Domain ${domain} does not have SOA record`);
+      }
     }
   } 
   else if (soaResponse.Authority && soaResponse.Authority.length > 0) {
@@ -99,197 +130,203 @@ const isZoneDelegated = async (domain: string, parentZone: string, endpoint: str
          !parentNS.some(ns => domainNS.includes(ns));
 };
 
-export const buildZoneTree = async (queriedDomain: string, resolverEndpoint: string = DEFAULT_RESOLVER.endpoint) => {
-  // Always do the SOA check - the API can handle it
+export const buildZoneHierarchy = async (
+  queriedDomain: string,
+  resolverEndpoint: string = DEFAULT_RESOLVER.endpoint
+): Promise<ZoneHierarchyData> => {
+  
   const initialCheck = await queryDns(queriedDomain, 'SOA', resolverEndpoint);
   if (initialCheck.Status === 3) {
     throw new Error(`Domain ${queriedDomain} does not exist`);
   }
 
-  const nodes: Node[] = [];
-  const edges: Edge[] = [];
-  const baseX = 400;
-  const xOffset = -100;
-  const yOffset = 120;
   let depth = 0;
 
-  // Root node using actual DNS query
+  // Root zone
   const rootNS = await getNameservers('.', resolverEndpoint);
-  nodes.push({
-    id: '.',
-    data: { 
-      label: 'Root (.)', 
-      zone: '.',
-      domains: ['.'],
-      nameservers: rootNS,
-      depth: depth++
-    },
-    position: { x: baseX, y: 0 },
-    type: 'zoneNode'
-  });
+  const root: ZoneHierarchyData = {
+    zoneName: '.',
+    domains: ['.'],
+    nameservers: rootNS,
+    depth: depth++,
+    isDelegated: false,
+    isCname: false,
+    children: []
+  };
 
   // If it's just the root zone, we're done
   if (queriedDomain === '.') {
-    return { nodes, edges };
+    return root;
   }
 
   try {
-    // Remove trailing dot before splitting, will add back as needed
     const cleanDomain = queriedDomain.replace(/\.$/, '');
     const parts = cleanDomain.split('.');
     const tld = parts[parts.length - 1];
     const publicSuffixes = getPublicSuffixList();
 
-    
     const potentialPublicSuffix = parts.slice(-2).join('.');
     const isSpecialTLD = publicSuffixes.has(potentialPublicSuffix);
     
     const { nameservers: tldNameservers } = await getZoneInfo(tld, resolverEndpoint);
     
-    const tldNode = {
-      id: tld,
-      data: {
-        label: tld,
-        zone: tld,
-        domains: isSpecialTLD ? [tld, potentialPublicSuffix] : [tld],
-        nameservers: tldNameservers,
-        depth: depth++
-      },
-      position: { x: baseX + (xOffset * 1), y: yOffset },
-      type: 'zoneNode'
+    // Always use tld as zoneName (e.g., 'uk'), but include multi-label suffix in domains if applicable
+    const tldZone: ZoneHierarchyData = {
+      zoneName: tld,
+      domains: isSpecialTLD ? [tld, potentialPublicSuffix] : [tld],
+      nameservers: tldNameservers,
+      depth: depth++,
+      isDelegated: true,
+      isCname: false,
+      children: []
     };
-
-    nodes.push(tldNode);
-    edges.push({
-      id: `e-${tld}-root`,
-      source: '.',
-      target: tld,
-      type: 'smoothstep',
-      animated: true,
-      style: { stroke: '#4B5563', strokeWidth: 2 }
-    });
+    root.children.push(tldZone);
 
     if (parts.length > (isSpecialTLD ? 2 : 1)) {
-      // Walk through all possible zone boundaries from TLD upwards
-      let currentParent = tld;
+      
+      let currentParent = tldZone;
       let currentDepth = depth;
       
-      // Start from the level right after TLD
       const startIndex = isSpecialTLD ? parts.length - 3 : parts.length - 2;
-      
+      const domainsToCheck: string[] = [];
       for (let i = startIndex; i >= 0; i--) {
-        const domainToCheck = parts.slice(i).join('.');
+        domainsToCheck.push(parts.slice(i).join('.'));
+      }
+      
+      for (let idx = 0; idx < domainsToCheck.length; idx++) {
+        const domainToCheck = domainsToCheck[idx];
         
         try {
           const { zoneName: checkZone, nameservers: checkNS } = await getZoneInfo(domainToCheck, resolverEndpoint);
+          const isDelegated = await isZoneDelegated(domainToCheck, currentParent.zoneName, resolverEndpoint);
           
-          // Check if this domain has different nameservers than its parent (delegation)
-          const isDelegated = await isZoneDelegated(domainToCheck, currentParent, resolverEndpoint);
-          
-          if (isDelegated || i === startIndex) {
-            // This is a new zone
-            const domains = [checkZone];
-            
-            // Check if this is the queried domain
-            if (domainToCheck === queriedDomain) {
-              const cnameInfo = await getCnameInfo(queriedDomain, resolverEndpoint);
-              if (cnameInfo.isCname) {
-                domains.push(queriedDomain);
-              }
-              
-              const zoneNode = {
-                id: checkZone,
-                data: {
-                  label: checkZone,
-                  zone: checkZone,
-                  domains,
-                  nameservers: checkNS,
-                  depth: currentDepth,
-                  isDelegated: isDelegated && i !== startIndex,
-                  isCname: cnameInfo.isCname,
-                  cnameTarget: cnameInfo.target
-                },
-                position: { x: baseX + (xOffset * currentDepth), y: yOffset * currentDepth },
-                type: 'zoneNode'
-              };
-              
-              nodes.push(zoneNode);
-              edges.push({
-                id: `e-${checkZone}-${currentParent}`,
-                source: currentParent,
-                target: checkZone,
-                type: 'smoothstep',
-                animated: true,
-                style: { stroke: '#4B5563', strokeWidth: 2 }
-              });
-              
-              // We found the queried domain, we're done
-              break;
-            } else if (domainToCheck.endsWith(queriedDomain) === false && queriedDomain.endsWith(domainToCheck)) {
-              // This zone contains the queried domain, continue checking deeper levels
-              const zoneNode = {
-                id: checkZone,
-                data: {
-                  label: checkZone,
-                  zone: checkZone,
-                  domains,
-                  nameservers: checkNS,
-                  depth: currentDepth,
-                  isDelegated: isDelegated && i !== startIndex
-                },
-                position: { x: baseX + (xOffset * currentDepth), y: yOffset * currentDepth },
-                type: 'zoneNode'
-              };
-              
-              nodes.push(zoneNode);
-              edges.push({
-                id: `e-${checkZone}-${currentParent}`,
-                source: currentParent,
-                target: checkZone,
-                type: 'smoothstep',
-                animated: true,
-                style: { stroke: '#4B5563', strokeWidth: 2 }
-              });
-              
-              currentParent = checkZone;
-              currentDepth++;
+          if (idx === 0 || isDelegated) {
+            const isQueriedDomain = (domainToCheck === queriedDomain);
+            let cnameInfo: { isCname: boolean; target?: string } = { isCname: false, target: undefined };
+            if (isQueriedDomain) {
+              cnameInfo = await getCnameInfo(queriedDomain, resolverEndpoint);
             }
-          } else if (i === 0) {
-            // This is the last level (queried domain) but not delegated - add to parent zone
-            const parentNode = nodes.find(n => n.id === currentParent);
-            if (parentNode && !parentNode.data.domains.includes(queriedDomain)) {
-              const cnameInfo = await getCnameInfo(queriedDomain, resolverEndpoint);
-              parentNode.data.domains.push(queriedDomain);
-              if (cnameInfo.isCname) {
-                parentNode.data.isCname = true;
-                parentNode.data.cnameTarget = cnameInfo.target;
+            
+            const newZone: ZoneHierarchyData = {
+              zoneName: checkZone,
+              domains: [checkZone],
+              nameservers: checkNS,
+              depth: currentDepth,
+              isDelegated: idx > 0 && isDelegated,
+              isCname: cnameInfo.isCname,
+              cnameTarget: cnameInfo.target,
+              children: []
+            };
+            
+            currentParent.children.push(newZone);
+            currentParent = newZone;
+            currentDepth++;
+          } else {
+            // Not delegated - add to parent zone's domains
+            if (!currentParent.domains.includes(domainToCheck)) {
+              currentParent.domains.push(domainToCheck);
+              
+              if (domainToCheck === queriedDomain) {
+                const cnameInfo = await getCnameInfo(queriedDomain, resolverEndpoint);
+                if (cnameInfo.isCname) {
+                  currentParent.isCname = true;
+                  currentParent.cnameTarget = cnameInfo.target;
+                }
               }
             }
           }
-        } catch (error) {
-          // Domain doesn't exist as a zone, might be a subdomain
-          if (i === 0) {
-            // This is the queried domain but not a zone - add to parent
-            const parentNode = nodes.find(n => n.id === currentParent);
-            if (parentNode && !parentNode.data.domains.includes(queriedDomain)) {
-              const cnameInfo = await getCnameInfo(queriedDomain, resolverEndpoint);
-              parentNode.data.domains.push(queriedDomain);
-              if (cnameInfo.isCname) {
-                parentNode.data.isCname = true;
-                parentNode.data.cnameTarget = cnameInfo.target;
+        } catch {
+          // Domain doesn't have its own zone - add to parent
+          if (!currentParent.domains.includes(domainToCheck)) {
+            currentParent.domains.push(domainToCheck);
+            
+            if (domainToCheck === queriedDomain) {
+              try {
+                const cnameInfo = await getCnameInfo(queriedDomain, resolverEndpoint);
+                if (cnameInfo.isCname) {
+                  currentParent.isCname = true;
+                  currentParent.cnameTarget = cnameInfo.target;
+                }
+              } catch {
+                // Ignore CNAME lookup errors
               }
             }
           }
         }
       }
     }
-
   } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error('Failed to query DNS records');
+    if (import.meta.env.DEV) console.error('Error building zone hierarchy:', error);
   }
 
+  return root;
+};
+
+/**
+ * UI Transformation: Convert ZoneHierarchyData tree to ReactFlow nodes and edges
+ */
+export const zoneHierarchyToReactFlow = (
+  hierarchy: ZoneHierarchyData,
+  baseX: number = 400,
+  xOffset: number = -100,
+  yOffset: number = 120
+): { nodes: Node[]; edges: Edge[] } => {
+  const nodes: Node[] = [];
+  const edges: Edge[] = [];
+
+  const traverse = (zone: ZoneHierarchyData, parentId?: string) => {
+    // Create node for this zone
+    const node: Node = {
+      id: zone.zoneName,
+      data: {
+        label: zone.zoneName === '.' ? 'Root (.)' : zone.zoneName,
+        zone: zone.zoneName,
+        domains: zone.domains,
+        nameservers: zone.nameservers,
+        depth: zone.depth,
+        isDelegated: zone.isDelegated,
+        isCname: zone.isCname,
+        cnameTarget: zone.cnameTarget
+      },
+      position: {
+        x: baseX + (xOffset * zone.depth),
+        y: yOffset * zone.depth
+      },
+      type: 'zoneNode'
+    };
+    nodes.push(node);
+
+    // Create edge to parent
+    if (parentId) {
+      edges.push({
+        id: `e-${zone.zoneName}-${parentId}`,
+        source: parentId,
+        target: zone.zoneName,
+        type: 'smoothstep',
+        animated: true,
+        style: { stroke: '#4B5563', strokeWidth: 2 }
+      });
+    }
+
+    // Recursively process children
+    zone.children.forEach(child => traverse(child, zone.zoneName));
+  };
+
+  traverse(hierarchy);
   return { nodes, edges };
+};
+
+/**
+ * Main entry point: Builds DNS zone hierarchy and converts to ReactFlow visualization
+ * This function combines business logic (buildZoneHierarchy) and UI transformation (zoneHierarchyToReactFlow)
+ */
+export const buildZoneTree = async (
+  queriedDomain: string,
+  resolverEndpoint: string = DEFAULT_RESOLVER.endpoint
+): Promise<{ nodes: Node[]; edges: Edge[] }> => {
+  // Step 1: Build pure data hierarchy (business logic)
+  const hierarchy = await buildZoneHierarchy(queriedDomain, resolverEndpoint);
+  
+  // Step 2: Transform to ReactFlow nodes and edges (UI layer)
+  return zoneHierarchyToReactFlow(hierarchy);
 };
