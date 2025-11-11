@@ -163,15 +163,15 @@ function App() {
             </button>
           </form>
           
-          <div className="absolute right-8 top-0 flex gap-2 items-center opacity-50 hover:opacity-100 transition-opacity">
-            <label htmlFor="resolver-select" className="text-[10px] text-gray-500 whitespace-nowrap">
+          <div className="absolute right-8 top-0 flex gap-2 items-center opacity-75 hover:opacity-100 transition-opacity">
+            <label htmlFor="resolver-select" className="text-[10px] text-gray-400 whitespace-nowrap">
               Select DNS resolver:
             </label>
             <select
               id="resolver-select"
               value={selectedResolver.id}
               onChange={(e) => handleResolverChange(e.target.value)}
-              className="px-3 py-3 bg-gray-800/60 border border-gray-700/30 rounded-lg text-gray-400 text-xs focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all duration-200 cursor-pointer hover:border-gray-600/50 hover:text-gray-300"
+              className="px-3 py-3 bg-gray-800/60 border border-gray-700/30 rounded-lg text-gray-300 text-xs focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all duration-200 cursor-pointer hover:border-gray-600/50 hover:text-gray-200"
               aria-label="Select DNS resolver"
               title="DNS Resolver"
             >
@@ -181,7 +181,7 @@ function App() {
                 </option>
               ))}
             </select>
-            <p className="text-[10px] text-gray-500 leading-tight w-16">
+            <p className="text-[10px] text-gray-400 leading-tight w-16">
               DNS over HTTPS
             </p>
           </div>
@@ -217,12 +217,28 @@ function App() {
         />
       )}
       <footer className="border-t border-gray-700/50 bg-gradient-to-r from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-sm py-6 shadow-2xl">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex justify-between items-center mb-4">
-            <div className="text-gray-300">
-              © 2025 DNS Zone Visualizer <span className="text-xs ml-2 bg-gradient-to-r from-blue-600/30 to-cyan-600/30 border border-cyan-500/30 px-3 py-1 rounded-full font-semibold text-cyan-300">v{APP_VERSION}</span>
+        <div className="w-full px-8">
+          <div className="flex items-start justify-between gap-8">
+            {/* Left: Name and Version */}
+            <div className="text-left">
+              <div className="text-gray-300 text-sm">© 2025 DNS Zone Visualizer</div>
+              <span className="inline-block mt-2 text-xs bg-gradient-to-r from-blue-600/30 to-cyan-600/30 border border-cyan-500/30 px-3 py-1 rounded-full font-semibold text-cyan-300">v{APP_VERSION}</span>
             </div>
-            <div className="flex items-center gap-4">
+
+            {/* Middle: Disclaimer */}
+            <div className="text-center text-xs text-gray-400 max-w-2xl">
+              <p className="text-gray-400">
+                A DNS zone hierarchy visualization tool using DNS over HTTPS (DoH) to query and display domain information. Intended for educational purposes only.
+              </p>
+              <p className="text-gray-400 mt-2">
+                Note: DNS zone relationships shown may occasionally be incomplete or inaccurate.
+                {' '}
+                Found any issues? <a href="mailto:contact@dnszone.dev" className="text-cyan-400 hover:text-cyan-300 transition-colors font-medium">Let us know</a>.
+              </p>
+            </div>
+
+            {/* Right: Social Icons */}
+            <div className="flex items-center justify-end gap-4">
               <a 
                 href="https://github.com/jcroyoaun" 
                 target="_blank" 
@@ -253,17 +269,6 @@ function App() {
                 <Globe className="w-5 h-5" />
               </a>
             </div>
-          </div>
-          
-          <div className="text-center max-w-2xl mx-auto text-xs text-gray-400">
-            <p className="text-gray-400">
-              A DNS zone hierarchy visualization tool using DNS over HTTPS (DoH) to query and display domain information. Intended for educational purposes only.
-            </p>
-            <p className="text-gray-400 mt-4"> {/* ← Add mt-4 or mt-2 */}
-              Note: DNS zone relationships shown may occasionally be incomplete or inaccurate.
-              {' '}
-              Found any issues? <a href="mailto:contact@dnszone.dev" className="text-cyan-400 hover:text-cyan-300 transition-colors font-medium">Let us know</a>.
-            </p>
           </div>
         </div>
       </footer>
