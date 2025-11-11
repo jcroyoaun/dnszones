@@ -1,60 +1,22 @@
 import { getPublicSuffixList } from './publicSuffix';
-import type { DnsResponse } from '../types/dns';
 import type { Node, Edge } from 'reactflow';
+import { DEFAULT_RESOLVER } from '../config/resolvers';
+import { queryDns } from './dns-client';
 
-const DNS_ENDPOINT = 'https://cloudflare-dns.com/dns-query';
-const FETCH_TIMEOUT = 10000; // 10 seconds
-
-const fetchWithTimeout = async (url: string, options: RequestInit, timeout: number): Promise<Response> => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-  
-  try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    return response;
-  } catch (error) {
-    clearTimeout(timeoutId);
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('DNS query timed out. Please try again.');
-    }
-    throw error;
-  }
-};
-
-const queryDns = async (domain: string, type: string): Promise<DnsResponse> => {
-  const url = `${DNS_ENDPOINT}?name=${domain}&type=${type}`;
-  const response = await fetchWithTimeout(url, {
-    headers: {
-      'Accept': 'application/dns-json'
-    }
-  }, FETCH_TIMEOUT);
-  const data = await response.json();
-  
-  if (import.meta.env.DEV) {
-    console.log(`DNS query for ${domain} (${type}):`, data);
-  }
-  
-  return data;
-};
-
-const getNameservers = async (domain: string): Promise<string[]> => {
-  const nsResponse = await queryDns(domain, 'NS');
-  if (nsResponse.Answer?.length > 0) {
+const getNameservers = async (domain: string, endpoint: string = DEFAULT_RESOLVER.endpoint): Promise<string[]> => {
+  const nsResponse = await queryDns(domain, 'NS', endpoint);
+  if (nsResponse.Answer && nsResponse.Answer.length > 0) {
     return nsResponse.Answer.map(record => record.data.toLowerCase()).sort();
   }
   return [];
 };
 
-const getCnameInfo = async (domain: string): Promise<{
+const getCnameInfo = async (domain: string, endpoint: string = DEFAULT_RESOLVER.endpoint): Promise<{
   isCname: boolean;
   target?: string;
 }> => {
-  const response = await queryDns(domain, 'CNAME');
-  if (response.Answer?.length > 0) {
+  const response = await queryDns(domain, 'CNAME', endpoint);
+  if (response.Answer && response.Answer.length > 0) {
     const cnameRecord = response.Answer.find(record => record.type === 5);
     if (cnameRecord) {
       return {
@@ -66,45 +28,60 @@ const getCnameInfo = async (domain: string): Promise<{
   return { isCname: false };
 };
 
-const getZoneInfo = async (domain: string): Promise<{ 
+const getZoneInfo = async (domain: string, endpoint: string = DEFAULT_RESOLVER.endpoint): Promise<{ 
   zoneName: string; 
   nameservers: string[]; 
   exists: boolean;
 }> => {
-  const soaResponse = await queryDns(domain, 'SOA');
+  const soaResponse = await queryDns(domain, 'SOA', endpoint);
   
+  // Status 3 = NXDOMAIN (domain doesn't exist)
+  // Status 2 = SERVFAIL (server failure)
   if (soaResponse.Status === 3) {
     throw new Error(`Domain ${domain} does not exist`);
+  }
+  
+  // Google DNS sometimes returns Status 2 (SERVFAIL) for queries that Cloudflare handles
+  // This can happen with TLD queries - treat as non-authoritative but valid
+  if (soaResponse.Status === 2 && !soaResponse.Answer && !soaResponse.Authority) {
+    throw new Error(`DNS server failure querying ${domain}`);
   }
 
   let zoneName: string;
   
-  if (soaResponse.Answer?.length > 0) {
+  if (soaResponse.Answer && soaResponse.Answer.length > 0) {
     const soaRecord = soaResponse.Answer.find(record => record.type === 6);
     if (soaRecord) {
-      zoneName = soaRecord.name.toLowerCase();
-      if (zoneName !== domain.toLowerCase()) {
+      zoneName = soaRecord.name.toLowerCase().replace(/\.$/, '');
+      const cleanDomain = domain.toLowerCase().replace(/\.$/, '');
+      if (zoneName !== cleanDomain) {
         throw new Error(`Domain ${domain} does not exist`);
       }
     } else {
-      zoneName = domain.toLowerCase();
+      zoneName = domain.toLowerCase().replace(/\.$/, '');
     }
   } 
-  else if (soaResponse.Authority?.length > 0) {
+  else if (soaResponse.Authority && soaResponse.Authority.length > 0) {
     const soaRecord = soaResponse.Authority.find(record => record.type === 6);
     if (soaRecord) {
-      if (soaRecord.name.toLowerCase() !== domain.toLowerCase()) {
+      const cleanZoneName = soaRecord.name.toLowerCase().replace(/\.$/, '');
+      const cleanDomain = domain.toLowerCase().replace(/\.$/, '');
+      if (cleanZoneName !== cleanDomain) {
         throw new Error(`Domain ${domain} does not exist`);
       }
-      zoneName = soaRecord.name.toLowerCase();
+      zoneName = cleanZoneName;
     } else {
-      throw new Error(`No SOA record found for ${domain}`);
+      // No SOA in Authority - might be a TLD or special zone
+      // Just use the domain as-is and try to get NS records
+      zoneName = domain.toLowerCase().replace(/\.$/, '');
     }
   } else {
-    throw new Error(`No SOA record found for ${domain}`);
+    // No Answer or Authority - might be a TLD query that some resolvers handle differently
+    // Try to proceed with NS lookup anyway
+    zoneName = domain.toLowerCase().replace(/\.$/, '');
   }
 
-  const nameservers = await getNameservers(zoneName);
+  const nameservers = await getNameservers(zoneName, endpoint);
   
   return { 
     zoneName, 
@@ -113,18 +90,18 @@ const getZoneInfo = async (domain: string): Promise<{
   };
 };
 
-const isZoneDelegated = async (domain: string, parentZone: string): Promise<boolean> => {
-  const parentNS = await getNameservers(parentZone);
-  const domainNS = await getNameservers(domain);
+const isZoneDelegated = async (domain: string, parentZone: string, endpoint: string = DEFAULT_RESOLVER.endpoint): Promise<boolean> => {
+  const parentNS = await getNameservers(parentZone, endpoint);
+  const domainNS = await getNameservers(domain, endpoint);
 
   return domainNS.length > 0 && 
          parentNS.length > 0 && 
          !parentNS.some(ns => domainNS.includes(ns));
 };
 
-export const buildZoneTree = async (queriedDomain: string) => {
+export const buildZoneTree = async (queriedDomain: string, resolverEndpoint: string = DEFAULT_RESOLVER.endpoint) => {
   // Always do the SOA check - the API can handle it
-  const initialCheck = await queryDns(queriedDomain, 'SOA');
+  const initialCheck = await queryDns(queriedDomain, 'SOA', resolverEndpoint);
   if (initialCheck.Status === 3) {
     throw new Error(`Domain ${queriedDomain} does not exist`);
   }
@@ -137,7 +114,7 @@ export const buildZoneTree = async (queriedDomain: string) => {
   let depth = 0;
 
   // Root node using actual DNS query
-  const rootNS = await getNameservers('.');
+  const rootNS = await getNameservers('.', resolverEndpoint);
   nodes.push({
     id: '.',
     data: { 
@@ -167,7 +144,7 @@ export const buildZoneTree = async (queriedDomain: string) => {
     const potentialPublicSuffix = parts.slice(-2).join('.');
     const isSpecialTLD = publicSuffixes.has(potentialPublicSuffix);
     
-    const { nameservers: tldNameservers } = await getZoneInfo(tld);
+    const { nameservers: tldNameservers } = await getZoneInfo(tld, resolverEndpoint);
     
     const tldNode = {
       id: tld,
@@ -197,10 +174,10 @@ export const buildZoneTree = async (queriedDomain: string) => {
         ? `${parts[parts.length - 3]}.${potentialPublicSuffix}`
         : parts.slice(-2).join('.');
 
-      const { zoneName: domainZone, nameservers: domainNameservers } = await getZoneInfo(domainToCheck);
+      const { zoneName: domainZone, nameservers: domainNameservers } = await getZoneInfo(domainToCheck, resolverEndpoint);
 
       // Check for CNAME first
-      const cnameInfo = await getCnameInfo(queriedDomain);
+      const cnameInfo = await getCnameInfo(queriedDomain, resolverEndpoint);
       const domains = [domainZone];
 
       // If the queried domain is different from the zone we found
@@ -210,11 +187,11 @@ export const buildZoneTree = async (queriedDomain: string) => {
           domains.push(queriedDomain);
         } else {
           // Only check for delegation if it's not a CNAME
-          const isDelegated = await isZoneDelegated(queriedDomain, domainZone);
+          const isDelegated = await isZoneDelegated(queriedDomain, domainZone, resolverEndpoint);
 
           if (isDelegated) {
             // Create a new node for the delegated zone
-            const { nameservers: subZoneNS } = await getZoneInfo(queriedDomain);
+            const { nameservers: subZoneNS } = await getZoneInfo(queriedDomain, resolverEndpoint);
             const delegatedNode = {
               id: queriedDomain,
               data: {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactFlow, { 
   Background, 
   Controls,
@@ -13,6 +13,9 @@ import packageJson from '../package.json';
 import ZoneNode from './components/ZoneNode';
 import ZoneDetails from './components/ZoneDetails';
 import { buildZoneTree } from './utils/dns';
+import { RESOLVERS, DEFAULT_RESOLVER, type DnsResolver } from './config/resolvers';
+import { APP_CONFIG } from './config/app';
+import { RateLimitError } from './utils/rate-limiter';
 
 const nodeTypes = {
   zoneNode: ZoneNode
@@ -33,6 +36,27 @@ function App() {
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedResolver, setSelectedResolver] = useState<DnsResolver>(DEFAULT_RESOLVER);
+
+  // Load saved resolver preference from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(APP_CONFIG.RESOLVER_STORAGE_KEY);
+    if (saved) {
+      const resolver = RESOLVERS.find(r => r.id === saved);
+      if (resolver) {
+        setSelectedResolver(resolver);
+      }
+    }
+  }, []);
+
+  // Save resolver preference to localStorage when it changes
+  const handleResolverChange = (resolverId: string) => {
+    const resolver = RESOLVERS.find(r => r.id === resolverId);
+    if (resolver) {
+      setSelectedResolver(resolver);
+      localStorage.setItem(APP_CONFIG.RESOLVER_STORAGE_KEY, resolver.id);
+    }
+  };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,7 +69,7 @@ function App() {
     setEdges([]);
 
     try {
-      const { nodes: newNodes, edges: newEdges } = await buildZoneTree(cleanDomain);
+      const { nodes: newNodes, edges: newEdges } = await buildZoneTree(cleanDomain, selectedResolver.endpoint);
       
       const nodesWithHandlers = newNodes.map(node => ({
         ...node,
@@ -66,7 +90,11 @@ function App() {
       if (import.meta.env.DEV) {
         console.error('Error building zone tree:', error);
       }
-      if (error instanceof Error) {
+      
+      if (error instanceof RateLimitError) {
+        const seconds = Math.ceil(error.resetTimeMs / 1000);
+        setError(`Rate limit exceeded. Please wait ${seconds} seconds before trying again.`);
+      } else if (error instanceof Error) {
         setError(error.message);
       } else {
         setError('Failed to query DNS records. Please try again.');
@@ -116,22 +144,48 @@ function App() {
           </p>
         </div>
         
-        <form onSubmit={handleSearch} className="max-w-2xl mx-auto flex gap-3">
-          <input
-            type="text"
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
-            placeholder="Enter domain (e.g., google.com, es.wikipedia.org)"
-            className="flex-1 px-5 py-3 bg-gray-800/80 border border-gray-600/50 rounded-xl focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 text-white placeholder-gray-400 transition-all duration-200 shadow-lg focus:shadow-cyan-500/20"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-8 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-xl hover:from-blue-500 hover:to-cyan-500 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 transition-all duration-200 shadow-lg hover:shadow-cyan-500/30 hover:scale-105"
-          >
-            {loading ? 'Searching...' : 'Search'}
-          </button>
-        </form>
+        <div className="relative w-full px-8">
+          <form onSubmit={handleSearch} className="max-w-2xl mx-auto flex gap-3">
+            <input
+              type="text"
+              value={domain}
+              onChange={(e) => setDomain(e.target.value)}
+              placeholder="Enter domain (e.g., google.com, es.wikipedia.org)"
+              className="flex-1 px-5 py-3 bg-gray-800/80 border border-gray-600/50 rounded-xl focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 text-white placeholder-gray-400 transition-all duration-200 shadow-lg focus:shadow-cyan-500/20"
+            />
+            
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-8 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-xl hover:from-blue-500 hover:to-cyan-500 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 transition-all duration-200 shadow-lg hover:shadow-cyan-500/30 hover:scale-105"
+            >
+              {loading ? 'Searching...' : 'Search'}
+            </button>
+          </form>
+          
+          <div className="absolute right-8 top-0 flex gap-2 items-center opacity-50 hover:opacity-100 transition-opacity">
+            <label htmlFor="resolver-select" className="text-[10px] text-gray-500 whitespace-nowrap">
+              Select DNS resolver:
+            </label>
+            <select
+              id="resolver-select"
+              value={selectedResolver.id}
+              onChange={(e) => handleResolverChange(e.target.value)}
+              className="px-3 py-3 bg-gray-800/60 border border-gray-700/30 rounded-lg text-gray-400 text-xs focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all duration-200 cursor-pointer hover:border-gray-600/50 hover:text-gray-300"
+              aria-label="Select DNS resolver"
+              title="DNS Resolver"
+            >
+              {RESOLVERS.map((resolver) => (
+                <option key={resolver.id} value={resolver.id}>
+                  {resolver.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] text-gray-500 leading-tight w-16">
+              DNS over HTTPS
+            </p>
+          </div>
+        </div>
         {error && (
           <div className="max-w-2xl mx-auto mt-3 text-red-400 text-sm bg-red-900/20 border border-red-500/30 rounded-lg px-4 py-2">
             {error}
@@ -203,11 +257,11 @@ function App() {
           
           <div className="text-center max-w-2xl mx-auto text-xs text-gray-400">
             <p className="text-gray-400">
-              This visualization tool is provided for educational purposes only.
+              A DNS zone hierarchy visualization tool using DNS over HTTPS (DoH) to query and display domain information. Intended for educational purposes only.
             </p>
-            <p className="text-gray-400">
-              DNS zone relationships shown may occasionally be incomplete or inaccurate.
-
+            <p className="text-gray-400 mt-4"> {/* ← Add mt-4 or mt-2 */}
+              Note: DNS zone relationships shown may occasionally be incomplete or inaccurate.
+              {' '}
               Found any issues? <a href="mailto:contact@dnszone.dev" className="text-cyan-400 hover:text-cyan-300 transition-colors font-medium">Let us know</a>.
             </p>
           </div>
