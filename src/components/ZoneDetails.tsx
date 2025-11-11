@@ -14,7 +14,16 @@ interface ZoneDetailsProps {
 
 const ZoneDetails: React.FC<ZoneDetailsProps> = ({ zone, onClose }) => {
   const [zoom, setZoom] = useState(100);
-  const [position, setPosition] = useState({ x: window.innerWidth - 400 - 16, y: 16 });
+  // Responsive initial position - centered on mobile, right-aligned on desktop
+  const getInitialPosition = () => {
+    const width = window.innerWidth;
+    const isMobile = width < 768;
+    return {
+      x: isMobile ? Math.max(16, (width - 384) / 2) : width - 400 - 16,
+      y: 16
+    };
+  };
+  const [position, setPosition] = useState(getInitialPosition());
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
@@ -38,6 +47,7 @@ const ZoneDetails: React.FC<ZoneDetailsProps> = ({ zone, onClose }) => {
     setZoom(100);
   }, []);
 
+  // Mouse events for desktop
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     setIsDragging(true);
     setDragOffset({
@@ -59,22 +69,50 @@ const ZoneDetails: React.FC<ZoneDetailsProps> = ({ zone, onClose }) => {
     setIsDragging(false);
   }, []);
 
+  // Touch events for mobile
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    setIsDragging(true);
+    setDragOffset({
+      x: touch.clientX - position.x,
+      y: touch.clientY - position.y
+    });
+  }, [position]);
+
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (!isDragging) return;
+    
+    const touch = e.touches[0];
+    setPosition({
+      x: touch.clientX - dragOffset.x,
+      y: touch.clientY - dragOffset.y
+    });
+  }, [isDragging, dragOffset]);
+
+  const handleTouchEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
   React.useEffect(() => {
     if (isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('touchmove', handleTouchMove);
+      document.addEventListener('touchend', handleTouchEnd);
       return () => {
         document.removeEventListener('mousemove', handleMouseMove);
         document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('touchmove', handleTouchMove);
+        document.removeEventListener('touchend', handleTouchEnd);
       };
     }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
+  }, [isDragging, handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
 
   if (!zone) return null;
 
   return (
     <div 
-      className="fixed w-96 bg-gradient-to-br from-gray-800/95 to-gray-900/95 backdrop-blur-lg rounded-2xl shadow-2xl border border-gray-600/50 flex flex-col max-h-[calc(100vh-180px)] z-50"
+      className="fixed w-[calc(100vw-32px)] max-w-96 bg-gradient-to-br from-gray-800/95 to-gray-900/95 backdrop-blur-lg rounded-2xl shadow-2xl border border-gray-600/50 flex flex-col max-h-[calc(100vh-180px)] z-50"
       onWheel={handleWheel}
       style={{ 
         transform: `scale(${zoom / 100})`,
@@ -87,10 +125,11 @@ const ZoneDetails: React.FC<ZoneDetailsProps> = ({ zone, onClose }) => {
       <div 
         className="flex justify-between items-center px-4 py-3 flex-shrink-0 cursor-grab active:cursor-grabbing"
         onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
       >
         <div className="flex items-center gap-2">
           <h3 className="text-lg font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">Zone Details</h3>
-          <div className="flex items-center gap-0.5 bg-gray-700/50 rounded-lg px-1.5 py-0.5" onMouseDown={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-0.5 bg-gray-700/50 rounded-lg px-1.5 py-0.5" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
             <button
               onClick={zoomOut}
               className="p-0.5 hover:bg-gray-600/50 rounded text-gray-400 hover:text-cyan-400 transition-all"
@@ -117,6 +156,7 @@ const ZoneDetails: React.FC<ZoneDetailsProps> = ({ zone, onClose }) => {
         <button 
           onClick={onClose}
           onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
           className="p-1.5 hover:bg-gray-700/50 rounded-lg text-gray-400 hover:text-cyan-400 transition-all duration-200 hover:scale-110"
         >
           <X className="w-4 h-4" />

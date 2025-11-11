@@ -131,47 +131,47 @@ function App() {
     
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
-      <div className="border-b border-gray-700/50 p-6 bg-gradient-to-r from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-sm shadow-2xl">
-        <div className="max-w-2xl mx-auto text-center mb-6">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500 bg-clip-text text-transparent mb-3 tracking-tight">
+      <div className="border-b border-gray-700/50 p-4 md:p-6 bg-gradient-to-r from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-sm shadow-2xl">
+        <div className="max-w-2xl mx-auto text-center mb-4 md:mb-6 px-2">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500 bg-clip-text text-transparent mb-2 md:mb-3 tracking-tight">
             DNS Zone Visualizer
           </h1>
-          <p className="text-gray-300 text-base mb-2 font-medium">
+          <p className="text-gray-300 text-sm md:text-base mb-1 md:mb-2 font-medium">
             Enter a domain name to visualize its DNS zone hierarchy and delegation structure.
           </p>
-          <p className="text-gray-400 text-sm">
+          <p className="text-gray-400 text-xs md:text-sm">
             Try domains like <span className="text-cyan-400 font-semibold">example.com</span> or <span className="text-cyan-400 font-semibold">subdomain.example.co.uk</span>
           </p>
         </div>
         
-        <div className="relative w-full px-8">
-          <form onSubmit={handleSearch} className="max-w-2xl mx-auto flex gap-3">
+        <div className="w-full px-2 md:px-8 space-y-3">
+          <form onSubmit={handleSearch} className="max-w-2xl mx-auto flex flex-col sm:flex-row gap-2 md:gap-3">
             <input
               type="text"
               value={domain}
               onChange={(e) => setDomain(e.target.value)}
-              placeholder="Enter domain (e.g., google.com, es.wikipedia.org)"
-              className="flex-1 px-5 py-3 bg-gray-800/80 border border-gray-600/50 rounded-xl focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 text-white placeholder-gray-400 transition-all duration-200 shadow-lg focus:shadow-cyan-500/20"
+              placeholder="Enter domain (e.g., google.com)"
+              className="flex-1 px-4 md:px-5 py-2.5 md:py-3 bg-gray-800/80 border border-gray-600/50 rounded-xl focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 text-white placeholder-gray-400 transition-all duration-200 shadow-lg focus:shadow-cyan-500/20 text-sm md:text-base"
             />
             
             <button
               type="submit"
               disabled={loading}
-              className="px-8 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-xl hover:from-blue-500 hover:to-cyan-500 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 transition-all duration-200 shadow-lg hover:shadow-cyan-500/30 hover:scale-105"
+              className="px-6 md:px-8 py-2.5 md:py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-xl hover:from-blue-500 hover:to-cyan-500 focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 transition-all duration-200 shadow-lg hover:shadow-cyan-500/30 hover:scale-105 text-sm md:text-base"
             >
               {loading ? 'Searching...' : 'Search'}
             </button>
           </form>
           
-          <div className="absolute right-8 top-0 flex gap-2 items-center opacity-75 hover:opacity-100 transition-opacity">
-            <label htmlFor="resolver-select" className="text-[11px] text-gray-400 whitespace-nowrap">
+          <div className="max-w-2xl mx-auto flex flex-wrap items-center justify-center gap-2 opacity-75 hover:opacity-100 transition-opacity text-xs md:text-sm">
+            <label htmlFor="resolver-select" className="text-[10px] md:text-[11px] text-gray-400 whitespace-nowrap">
               Select DNS resolver:
             </label>
             <select
               id="resolver-select"
               value={selectedResolver.id}
               onChange={(e) => handleResolverChange(e.target.value)}
-              className="px-3 py-3 bg-gray-800/60 border border-gray-700/30 rounded-lg text-gray-300 text-[13px] focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all duration-200 cursor-pointer hover:border-gray-600/50 hover:text-gray-200"
+              className="px-2 md:px-3 py-2 md:py-3 bg-gray-800/60 border border-gray-700/30 rounded-lg text-gray-300 text-xs md:text-[13px] focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all duration-200 cursor-pointer hover:border-gray-600/50 hover:text-gray-200"
               aria-label="Select DNS resolver"
               title="DNS Resolver"
             >
@@ -181,13 +181,13 @@ function App() {
                 </option>
               ))}
             </select>
-            <p className="text-[10px] text-gray-400 leading-tight w-16">
+            <p className="text-[9px] md:text-[10px] text-gray-400 leading-tight">
               DNS over HTTPS
             </p>
           </div>
         </div>
         {error && (
-          <div className="max-w-2xl mx-auto mt-3 text-red-400 text-sm bg-red-900/20 border border-red-500/30 rounded-lg px-4 py-2">
+          <div className="max-w-2xl mx-auto mt-3 text-red-400 text-xs md:text-sm bg-red-900/20 border border-red-500/30 rounded-lg px-3 md:px-4 py-2 mx-2 md:mx-0">
             {error}
           </div>
         )}
@@ -216,9 +216,57 @@ function App() {
           onClose={() => setSelectedZone(null)}
         />
       )}
-      <footer className="border-t border-gray-700/50 bg-gradient-to-r from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-sm py-6 shadow-2xl">
-        <div className="w-full px-8">
-          <div className="flex items-start justify-between gap-8">
+      <footer className="border-t border-gray-700/50 bg-gradient-to-r from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-sm py-4 md:py-6 shadow-2xl">
+        <div className="w-full px-4 md:px-8">
+          {/* Mobile: Stacked Layout */}
+          <div className="flex flex-col gap-4 md:hidden">
+            <div className="flex items-center justify-between">
+              <div className="text-left">
+                <div className="text-gray-300 text-xs">© 2025 DNS Zone Visualizer</div>
+                <span className="inline-block mt-1 text-[10px] bg-gradient-to-r from-blue-600/30 to-cyan-600/30 border border-cyan-500/30 px-2 py-0.5 rounded-full font-semibold text-cyan-300">v{APP_VERSION}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <a 
+                  href="https://github.com/jcroyoaun" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-cyan-400 transition-all duration-200"
+                  aria-label="GitHub"
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd" />
+                  </svg>
+                </a>
+                <a 
+                  href="https://x.com/jcroyoaun" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-cyan-400 transition-all duration-200"
+                  aria-label="X (Twitter)"
+                >
+                  <X className="w-4 h-4" />
+                </a>
+                <a 
+                  href="https://jcroyoaun.com" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-cyan-400 transition-all duration-200"
+                  aria-label="Website"
+                >
+                  <Globe className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+            <div className="text-center text-[10px] text-gray-400">
+              <p>DNS zone hierarchy visualization tool using DoH. Educational purposes only.</p>
+              <p className="mt-1">
+                Issues? <a href="mailto:contact@dnszone.dev" className="text-cyan-400 hover:text-cyan-300 transition-colors font-medium">Let us know</a>.
+              </p>
+            </div>
+          </div>
+
+          {/* Desktop: 3-Column Layout */}
+          <div className="hidden md:flex items-start justify-between gap-8">
             {/* Left: Name and Version */}
             <div className="text-left">
               <div className="text-gray-300 text-sm">© 2025 DNS Zone Visualizer</div>
