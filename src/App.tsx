@@ -164,14 +164,14 @@ function App() {
           </form>
           
           <div className="absolute right-8 top-0 flex gap-2 items-center opacity-75 hover:opacity-100 transition-opacity">
-            <label htmlFor="resolver-select" className="text-[10px] text-gray-400 whitespace-nowrap">
+            <label htmlFor="resolver-select" className="text-[11px] text-gray-400 whitespace-nowrap">
               Select DNS resolver:
             </label>
             <select
               id="resolver-select"
               value={selectedResolver.id}
               onChange={(e) => handleResolverChange(e.target.value)}
-              className="px-3 py-3 bg-gray-800/60 border border-gray-700/30 rounded-lg text-gray-300 text-xs focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all duration-200 cursor-pointer hover:border-gray-600/50 hover:text-gray-200"
+              className="px-3 py-3 bg-gray-800/60 border border-gray-700/30 rounded-lg text-gray-300 text-[13px] focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all duration-200 cursor-pointer hover:border-gray-600/50 hover:text-gray-200"
               aria-label="Select DNS resolver"
               title="DNS Resolver"
             >
