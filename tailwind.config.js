@@ -15,7 +15,10 @@ export default {
         'zone-tld-border': 'var(--zone-tld-light)',
         'zone-domain-border': 'var(--zone-domain-light)',
         'zone-subdomain-border': 'var(--zone-subdomain-light)',
-      }
+      },
+      screens: {
+        'landscape': { 'raw': '(orientation: landscape) and (max-height: 500px)' },
+      },
     },
   },
   plugins: [],
