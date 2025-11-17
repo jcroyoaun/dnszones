@@ -2,7 +2,7 @@ import { APP_CONFIG } from '../config/app';
 import { dnsRateLimiter, RateLimitError } from './rate-limiter';
 import type { DnsResponse } from '../types/dns';
 
-const fetchWithTimeout = async (
+export const fetchWithTimeout = async (
   url: string,
   options: RequestInit,
   timeout: number

@@ -7,15 +7,17 @@ import ReactFlow, {
   Edge
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { Globe, X } from 'lucide-react';
+import { Globe, X, FileText, Network } from 'lucide-react';
 import packageJson from '../package.json';
 
 import ZoneNode from './components/ZoneNode';
 import ZoneDetails from './components/ZoneDetails';
-import { buildZoneTree } from './utils/dns';
+import DnsRecordInspector from './components/DnsRecordInspector';
+import { buildZoneTree, getDetailedDnsRecords, findZoneApex } from './utils/dns';
 import { RESOLVERS, DEFAULT_RESOLVER, type DnsResolver } from './config/resolvers';
 import { APP_CONFIG } from './config/app';
 import { RateLimitError } from './utils/rate-limiter';
+import type { DetailedDnsRecords } from './types/dns';
 
 const nodeTypes = {
   zoneNode: ZoneNode
@@ -37,6 +39,26 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedResolver, setSelectedResolver] = useState<DnsResolver>(DEFAULT_RESOLVER);
+  const [viewMode, setViewMode] = useState<'hierarchy' | 'inspector'>('hierarchy');
+  const [searchedDomain, setSearchedDomain] = useState<string>('');
+  
+  // Single source of truth: store ALL fetched data once
+  const [dnsRecordsCache, setDnsRecordsCache] = useState<DetailedDnsRecords | null>(null);
+  const [zoneApexCache, setZoneApexCache] = useState<string | null>(null);
+  
+  // Footer visibility state (true initially)
+  const [showFooter, setShowFooter] = useState(true);
+  
+  // Reset footer visibility when switching views
+  useEffect(() => {
+    if (viewMode === 'hierarchy') {
+      // ALWAYS show footer in hierarchy view
+      setShowFooter(true);
+    } else {
+      // Show footer initially in inspector view
+      setShowFooter(true);
+    }
+  }, [viewMode]);
 
   // Load saved resolver preference from localStorage
   useEffect(() => {
@@ -67,11 +89,28 @@ function App() {
     setSelectedZone(null);
     setNodes([]);
     setEdges([]);
+    setDnsRecordsCache(null);
+    setZoneApexCache(null);
 
     try {
-      const { nodes: newNodes, edges: newEdges } = await buildZoneTree(cleanDomain, selectedResolver.endpoint);
+      // Fetch zone hierarchy AND DNS records in parallel (single fetch, no re-queries)
+      const [zoneTreeResult, zoneApex] = await Promise.all([
+        buildZoneTree(cleanDomain, selectedResolver.endpoint),
+        findZoneApex(cleanDomain, selectedResolver.endpoint)
+      ]);
       
-      const nodesWithHandlers = newNodes.map(node => ({
+      // Now fetch DNS records using the zone apex we already found
+      const dnsRecords = await getDetailedDnsRecords(cleanDomain, selectedResolver.endpoint, zoneApex);
+      
+      if (import.meta.env.DEV) {
+        console.log('[App] Search complete, storing cache:', {
+          domain: cleanDomain,
+          zoneApex,
+          hasDnsRecords: !!dnsRecords
+        });
+      }
+      
+      const nodesWithHandlers = zoneTreeResult.nodes.map(node => ({
         ...node,
         data: {
           ...node.data,
@@ -85,7 +124,11 @@ function App() {
       }));
       
       setNodes(nodesWithHandlers);
-      setEdges(newEdges);
+      setEdges(zoneTreeResult.edges);
+      setSearchedDomain(cleanDomain);
+      setDnsRecordsCache(dnsRecords);
+      setZoneApexCache(zoneApex);
+      setViewMode('hierarchy'); // Always show hierarchy first after search
     } catch (error) {
       if (import.meta.env.DEV) {
         console.error('Error building zone tree:', error);
@@ -131,9 +174,9 @@ function App() {
     
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
-      <div className="border-b border-gray-700/50 p-3 landscape:p-2 md:p-6 bg-gradient-to-r from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-sm shadow-2xl">
-        <div className="max-w-2xl mx-auto text-center mb-3 landscape:mb-2 md:mb-6 px-2">
-          <h1 className="text-xl landscape:text-lg sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500 bg-clip-text text-transparent mb-1 landscape:mb-0.5 md:mb-3 tracking-tight">
+      <div className="border-b border-gray-700/50 p-3 landscape:p-1.5 md:p-6 bg-gradient-to-r from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-sm shadow-2xl">
+        <div className="max-w-2xl mx-auto text-center mb-3 landscape:mb-1.5 md:mb-6 px-2">
+          <h1 className="text-2xl landscape:text-lg sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-500 bg-clip-text text-transparent tracking-tight mb-1 landscape:mb-0.5 md:mb-3">
             DNS Zone Visualizer
           </h1>
           <p className="text-gray-300 text-xs landscape:hidden md:text-base mb-1 md:mb-2 font-medium">
@@ -163,27 +206,65 @@ function App() {
             </button>
           </form>
           
-          <div className="max-w-2xl mx-auto flex flex-wrap items-center justify-center gap-2 landscape:gap-1.5 opacity-75 hover:opacity-100 transition-opacity text-xs md:text-sm landscape:hidden sm:landscape:flex">
-            <label htmlFor="resolver-select" className="text-[10px] md:text-[11px] text-gray-400 whitespace-nowrap">
-              Select DNS resolver:
-            </label>
-            <select
-              id="resolver-select"
-              value={selectedResolver.id}
-              onChange={(e) => handleResolverChange(e.target.value)}
-              className="px-2 md:px-3 py-1.5 landscape:py-1 md:py-3 bg-gray-800/60 border border-gray-700/30 rounded-lg text-gray-300 text-xs md:text-[13px] focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all duration-200 cursor-pointer hover:border-gray-600/50 hover:text-gray-200"
-              aria-label="Select DNS resolver"
-              title="DNS Resolver"
-            >
-              {RESOLVERS.map((resolver) => (
-                <option key={resolver.id} value={resolver.id}>
-                  {resolver.name}
-                </option>
-              ))}
-            </select>
-            <p className="text-[9px] md:text-[10px] text-gray-400 leading-tight">
-              DNS over HTTPS
-            </p>
+          {/* Controls Row: DNS Resolver + View Mode Toggle */}
+          <div className="max-w-2xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 landscape:gap-2 px-2">
+            {/* DNS Resolver Selector */}
+            <div className="flex flex-wrap items-center justify-center gap-1.5 landscape:gap-1 opacity-70 hover:opacity-100 transition-opacity text-xs">
+              <label htmlFor="resolver-select" className="text-[9px] md:text-[10px] text-gray-400 whitespace-nowrap">
+                Select DNS resolver:
+              </label>
+              <select
+                id="resolver-select"
+                value={selectedResolver.id}
+                onChange={(e) => handleResolverChange(e.target.value)}
+                className="px-1.5 md:px-2 py-1 landscape:py-0.5 md:py-1.5 bg-gray-800/60 border border-gray-700/30 rounded text-gray-300 text-[10px] md:text-xs focus:ring-2 focus:ring-cyan-500/50 focus:border-cyan-500/50 transition-all duration-200 cursor-pointer hover:border-gray-600/50 hover:text-gray-200"
+                aria-label="Select DNS resolver"
+                title="DNS Resolver"
+              >
+                {RESOLVERS.map((resolver) => (
+                  <option key={resolver.id} value={resolver.id}>
+                    {resolver.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[8px] md:text-[9px] text-gray-400 leading-tight">
+                DNS over HTTPS
+              </p>
+            </div>
+            
+            {/* View Mode Toggle Buttons */}
+            <div className="flex items-center gap-1 rounded-lg bg-gray-800/60 p-1">
+              <button
+                onClick={() => searchedDomain && setViewMode('hierarchy')}
+                disabled={!searchedDomain}
+                className={`flex items-center gap-2 px-4 landscape:px-2 py-2 landscape:py-1 rounded-md text-sm landscape:text-[11px] md:text-base font-semibold transition-all ${
+                  searchedDomain && viewMode === 'hierarchy'
+                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg'
+                    : searchedDomain
+                    ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'
+                    : 'text-gray-600 cursor-not-allowed opacity-50'
+                }`}
+                title={searchedDomain ? "View zone hierarchy" : "Search a domain first"}
+              >
+                <Network className="w-4 h-4 landscape:w-3 landscape:h-3" />
+                <span>Zone Hierarchy</span>
+              </button>
+              <button
+                onClick={() => searchedDomain && setViewMode('inspector')}
+                disabled={!searchedDomain}
+                className={`flex items-center gap-2 px-4 landscape:px-2 py-2 landscape:py-1 rounded-md text-sm landscape:text-[11px] md:text-base font-semibold transition-all ${
+                  searchedDomain && viewMode === 'inspector'
+                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg'
+                    : searchedDomain
+                    ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'
+                    : 'text-gray-600 cursor-not-allowed opacity-50'
+                }`}
+                title={searchedDomain ? "View record details" : "Search a domain first"}
+              >
+                <FileText className="w-4 h-4 landscape:w-3 landscape:h-3" />
+                <span>Record Details</span>
+              </button>
+            </div>
           </div>
         </div>
         {error && (
@@ -192,31 +273,79 @@ function App() {
           </div>
         )}
       </div>
-      <div className="flex-1 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950">
-        {(nodes.length > 0 || edges.length > 0) && (
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            connectionMode={ConnectionMode.Loose}
-            defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-            minZoom={0.2}
-            maxZoom={1.5}
-            fitView
-          >
-            <Background color="#374151" gap={16} />
-            <Controls className="dark:bg-gray-800 dark:border-gray-700" />
-          </ReactFlow>
+
+      {/* Toggle button - only show if we have results (hidden in landscape, shown in header instead) */}
+      {searchedDomain && (
+        <div className="border-b border-gray-700/50 py-2 md:py-3 bg-gray-900/50 flex justify-center landscape:hidden">
+          <div className="inline-flex rounded-lg bg-gray-800/60 p-1 gap-1">
+            <button
+              onClick={() => setViewMode('hierarchy')}
+              className={`flex items-center gap-2 px-4 md:px-6 py-2 rounded-lg text-xs md:text-sm font-semibold transition-all ${
+                viewMode === 'hierarchy'
+                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'
+              }`}
+            >
+              <Network className="w-4 h-4" />
+              Zone Hierarchy
+            </button>
+            <button
+              onClick={() => setViewMode('inspector')}
+              className={`flex items-center gap-2 px-4 md:px-6 py-2 rounded-lg text-xs md:text-sm font-semibold transition-all ${
+                viewMode === 'inspector'
+                  ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              Record Details
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 overflow-hidden min-h-0">
+        {viewMode === 'hierarchy' ? (
+          // Zone Hierarchy View (ReactFlow)
+          <>
+            {(nodes.length > 0 || edges.length > 0) && (
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                nodeTypes={nodeTypes}
+                connectionMode={ConnectionMode.Loose}
+                defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+                minZoom={0.2}
+                maxZoom={1.5}
+                fitView
+              >
+                <Background color="#374151" gap={16} />
+                <Controls className="dark:bg-gray-800 dark:border-gray-700" />
+              </ReactFlow>
+            )}
+            {selectedZone && (
+              <ZoneDetails
+                zone={selectedZone}
+                onClose={() => setSelectedZone(null)}
+              />
+            )}
+          </>
+        ) : (
+          // DNS Record Inspector View (Full-screen educational)
+          searchedDomain && (
+            <DnsRecordInspector
+              domain={searchedDomain}
+              onClose={() => {}}
+              resolverEndpoint={selectedResolver.endpoint}
+              preloadedDnsRecords={dnsRecordsCache}
+              preloadedZoneApex={zoneApexCache}
+              onScrollToBottom={setShowFooter}
+            />
+          )
         )}
       </div>
-
-      {selectedZone && (
-        <ZoneDetails
-          zone={selectedZone}
-          onClose={() => setSelectedZone(null)}
-        />
-      )}
-      <footer className="border-t border-gray-700/50 bg-gradient-to-r from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-sm py-3 landscape:py-1.5 md:py-6 shadow-2xl">
+      {showFooter && (
+        <footer className="border-t border-gray-700/50 bg-gradient-to-r from-gray-900/95 via-gray-800/95 to-gray-900/95 backdrop-blur-sm py-3 landscape:py-1.5 md:py-6 shadow-2xl">
         <div className="w-full px-4 md:px-8">
           {/* Mobile: Stacked Layout */}
           <div className="flex flex-col gap-3 landscape:gap-1 md:hidden">
@@ -320,6 +449,7 @@ function App() {
           </div>
         </div>
       </footer>
+      )}
     </div>
   );
 }

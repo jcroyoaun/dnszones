@@ -34,4 +34,28 @@ export interface ZoneInfo {
     expire: number;
     minimum: number;
   };
+  nameservers?: string[];
+  ttl?: number;
+}
+
+export interface DetailedDnsRecords {
+  soa?: DnsRecord & {
+    parsed?: ZoneInfo['soa'];
+  };
+  ns?: DnsRecord[];
+  a?: DnsRecord[];
+  aaaa?: DnsRecord[];
+  cname?: DnsRecord[];
+  mx?: DnsRecord[];
+  txt?: DnsRecord[];
+}
+
+export interface RdapResponse {
+  domain?: string;
+  registrar?: string;
+  registrationDate?: string;
+  expirationDate?: string;
+  status?: string[];
+  nameservers?: string[];
+  error?: string;
 }

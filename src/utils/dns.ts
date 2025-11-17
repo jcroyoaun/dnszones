@@ -2,6 +2,7 @@ import { getPublicSuffixList } from './publicSuffix';
 import type { Node, Edge } from 'reactflow';
 import { DEFAULT_RESOLVER } from '../config/resolvers';
 import { queryDns } from './dns-client';
+import type { DetailedDnsRecords, DnsRecord, DnsResponse } from '../types/dns';
 
 export interface ZoneHierarchyData {
   zoneName: string;
@@ -330,3 +331,175 @@ export const buildZoneTree = async (
   // Step 2: Transform to ReactFlow nodes and edges (UI layer)
   return zoneHierarchyToReactFlow(hierarchy);
 };
+
+/**
+ * Parse SOA record data into structured format
+ */
+function parseSOA(soaData: string) {
+  const parts = soaData.split(' ');
+  if (parts.length >= 7) {
+    return {
+      mname: parts[0],
+      rname: parts[1],
+      serial: parseInt(parts[2]),
+      refresh: parseInt(parts[3]),
+      retry: parseInt(parts[4]),
+      expire: parseInt(parts[5]),
+      minimum: parseInt(parts[6])
+    };
+  }
+  return undefined;
+}
+
+/**
+ * Query DNS multiple times and return the response with the highest TTL
+ * This helps get the original TTL value instead of remaining cache time
+ */
+async function queryDnsWithMaxTTL(
+  domain: string,
+  type: string,
+  endpoint: string
+): Promise<DnsResponse> {
+  // Make 3 parallel queries to increase chances of getting fresh TTL
+  const queries = await Promise.allSettled([
+    queryDns(domain, type, endpoint),
+    queryDns(domain, type, endpoint),
+    queryDns(domain, type, endpoint)
+  ]);
+
+  // Get all successful responses
+  const successfulResponses = queries
+    .filter((result): result is PromiseFulfilledResult<DnsResponse> => result.status === 'fulfilled')
+    .map(result => result.value);
+
+  if (successfulResponses.length === 0) {
+    throw new Error('All DNS queries failed');
+  }
+
+  // Find the response with the highest TTL in its Answer section
+  let maxTTLResponse = successfulResponses[0];
+  let maxTTL = 0;
+
+  for (const response of successfulResponses) {
+    if (response.Answer && response.Answer.length > 0) {
+      const ttls = response.Answer.map(record => record.TTL);
+      const highestTTL = Math.max(...ttls);
+      if (highestTTL > maxTTL) {
+        maxTTL = highestTTL;
+        maxTTLResponse = response;
+      }
+    }
+  }
+
+  return maxTTLResponse;
+}
+
+/**
+ * Find the zone apex for a given domain
+ * Uses the same zone detection logic as buildZoneHierarchy
+ */
+export async function findZoneApex(
+  domain: string,
+  resolverEndpoint: string = DEFAULT_RESOLVER.endpoint
+): Promise<string> {
+  try {
+    // Build the zone hierarchy to find the actual zone
+    const hierarchy = await buildZoneHierarchy(domain, resolverEndpoint);
+    
+    // Traverse the hierarchy tree to find the deepest zone (the actual apex)
+    // Start from root and go down through children
+    let current: ZoneHierarchyData = hierarchy;
+    while (current.children && current.children.length > 0) {
+      // Go to the first (and typically only) child
+      current = current.children[0];
+    }
+    
+    // The deepest zone is the apex
+    return current.zoneName;
+  } catch (error) {
+    // If zone detection fails, return the domain as-is
+    if (import.meta.env.DEV) {
+      console.error('Failed to find zone apex, using domain as-is:', error);
+    }
+    return domain;
+  }
+}
+
+/**
+ * Fetch detailed DNS records for a domain (SOA, NS, A, AAAA, CNAME, MX, TXT)
+ * Makes multiple queries to get the maximum (original) TTL values
+ * Automatically detects and queries the zone apex for SOA/NS records
+ */
+export async function getDetailedDnsRecords(
+  domain: string,
+  resolverEndpoint: string = DEFAULT_RESOLVER.endpoint,
+  precomputedZoneApex?: string
+): Promise<DetailedDnsRecords> {
+  const records: DetailedDnsRecords = {};
+
+  try {
+    // Use precomputed zone apex if provided, otherwise find it
+    // This avoids duplicate zone detection calls
+    const zoneApex = precomputedZoneApex || await findZoneApex(domain, resolverEndpoint);
+    
+    // Query each record type 3 times in parallel to get the max (freshest) TTL
+    // DoH resolvers return remaining cache TTL, so we query multiple times and take the highest
+    // SOA and NS are queried from zone apex, others from the actual domain
+    const [soaRes, nsRes, aRes, aaaaRes, cnameRes, mxRes, txtRes] = await Promise.allSettled([
+      queryDnsWithMaxTTL(zoneApex, 'SOA', resolverEndpoint),
+      queryDnsWithMaxTTL(zoneApex, 'NS', resolverEndpoint),
+      queryDnsWithMaxTTL(domain, 'A', resolverEndpoint),
+      queryDnsWithMaxTTL(domain, 'AAAA', resolverEndpoint),
+      queryDnsWithMaxTTL(domain, 'CNAME', resolverEndpoint),
+      queryDnsWithMaxTTL(domain, 'MX', resolverEndpoint),
+      queryDnsWithMaxTTL(domain, 'TXT', resolverEndpoint)
+    ]);
+
+    // SOA (type 6)
+    if (soaRes.status === 'fulfilled' && soaRes.value.Answer) {
+      const soaRecord = soaRes.value.Answer.find((r: DnsRecord) => r.type === 6);
+      if (soaRecord) {
+        records.soa = {
+          ...soaRecord,
+          parsed: parseSOA(soaRecord.data)
+        };
+      }
+    }
+
+    // NS (type 2)
+    if (nsRes.status === 'fulfilled' && nsRes.value.Answer) {
+      records.ns = nsRes.value.Answer.filter((r: DnsRecord) => r.type === 2);
+    }
+
+    // A (type 1)
+    if (aRes.status === 'fulfilled' && aRes.value.Answer) {
+      records.a = aRes.value.Answer.filter((r: DnsRecord) => r.type === 1);
+    }
+
+    // AAAA (type 28)
+    if (aaaaRes.status === 'fulfilled' && aaaaRes.value.Answer) {
+      records.aaaa = aaaaRes.value.Answer.filter((r: DnsRecord) => r.type === 28);
+    }
+
+    // CNAME (type 5)
+    if (cnameRes.status === 'fulfilled' && cnameRes.value.Answer) {
+      records.cname = cnameRes.value.Answer.filter((r: DnsRecord) => r.type === 5);
+    }
+
+    // MX (type 15)
+    if (mxRes.status === 'fulfilled' && mxRes.value.Answer) {
+      records.mx = mxRes.value.Answer.filter((r: DnsRecord) => r.type === 15);
+    }
+
+    // TXT (type 16)
+    if (txtRes.status === 'fulfilled' && txtRes.value.Answer) {
+      records.txt = txtRes.value.Answer.filter((r: DnsRecord) => r.type === 16);
+    }
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error('Error fetching detailed DNS records:', error);
+    }
+  }
+
+  return records;
+}
