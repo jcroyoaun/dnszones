@@ -210,7 +210,7 @@ function App() {
           <div className="max-w-2xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 landscape:gap-2 px-2">
             {/* DNS Resolver Selector */}
             <div className="flex flex-wrap items-center justify-center gap-1.5 landscape:gap-1 opacity-70 hover:opacity-100 transition-opacity text-xs">
-              <label htmlFor="resolver-select" className="text-[9px] md:text-[10px] text-gray-400 whitespace-nowrap">
+              <label htmlFor="resolver-select" className="text-[11px] md:text-xs text-gray-400 whitespace-nowrap">
                 Select DNS resolver:
               </label>
               <select
@@ -227,10 +227,13 @@ function App() {
                   </option>
                 ))}
               </select>
-              <p className="text-[8px] md:text-[9px] text-gray-400 leading-tight">
+              <p className="text-[9px] md:text-[10px] text-gray-400 leading-tight">
                 DNS over HTTPS
               </p>
             </div>
+
+
+
             
             {/* View Mode Toggle Buttons */}
             <div className="flex items-center gap-1 rounded-lg bg-gray-800/60 p-1">

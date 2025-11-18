@@ -198,10 +198,10 @@ const DnsRecordInspector: React.FC<DnsRecordInspectorProps> = ({
             <FileText className="w-6 h-6 md:w-10 md:h-10 landscape:w-4 landscape:h-4 text-purple-400" />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-lg md:text-3xl landscape:text-xs font-bold bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent inline">
-              Record Details
-            </h2>
-            <span className="text-2xl md:text-4xl landscape:text-[11px] text-purple-300 font-mono ml-3 landscape:ml-1 font-bold">{domain}</span>
+          <h2 className="text-2xl md:text-3xl landscape:text-sm font-bold bg-gradient-to-r from-purple-400 to-blue-500 bg-clip-text text-transparent inline">
+  Record Details
+</h2>
+<span className="text-3xl md:text-5xl landscape:text-base text-purple-300 font-mono ml-3 landscape:ml-1 font-bold">{domain}</span>
           </div>
         </div>
       </div>
@@ -218,13 +218,14 @@ const DnsRecordInspector: React.FC<DnsRecordInspectorProps> = ({
         }}
       >
         <div className="max-w-5xl mx-auto space-y-3 md:space-y-6 landscape:space-y-2">
+
         {/* SOA Section - Educational (BLUE/CYAN) */}
         <div className="border-2 border-blue-400/40 rounded-lg overflow-hidden bg-gradient-to-r from-blue-800/20 to-cyan-800/20">
           <button
             onClick={() => toggleSection('soa')}
             className="w-full flex items-center justify-between px-4 md:px-5 landscape:px-2 py-3 md:py-4 landscape:py-1 bg-blue-800/30 hover:bg-blue-800/40 transition-colors"
           >
-            <span className="font-bold text-xl md:text-2xl landscape:text-xs text-blue-200 uppercase tracking-wide">📜 SOA Record (Start of Authority)</span>
+            <span className="font-bold text-4xl md:text-3xl landscape:text-sm text-blue-200 uppercase tracking-wide">📜 SOA Record (Start of Authority)</span>
             {expandedSections.soa ? (
               <ChevronUp className="w-5 h-5 md:w-6 md:h-6 landscape:w-3 landscape:h-3 text-blue-300" />
             ) : (
@@ -352,7 +353,7 @@ const DnsRecordInspector: React.FC<DnsRecordInspectorProps> = ({
             onClick={() => toggleSection('records')}
             className="w-full flex items-center justify-between px-4 md:px-5 landscape:px-2 py-3 md:py-4 landscape:py-1 bg-purple-800/30 hover:bg-purple-800/40 transition-colors"
           >
-            <span className="font-bold text-xl md:text-2xl landscape:text-xs text-purple-200 uppercase tracking-wide">🗂️ DNS Records</span>
+            <span className="font-bold text-5xl md:text-3xl landscape:text-sm text-purple-200 uppercase tracking-wide">🗂️ DNS Records</span>
             {expandedSections.records ? (
               <ChevronUp className="w-5 h-5 md:w-6 md:h-6 landscape:w-3 landscape:h-3 text-purple-300" />
             ) : (
@@ -470,7 +471,7 @@ const DnsRecordInspector: React.FC<DnsRecordInspectorProps> = ({
             onClick={() => toggleSection('whois')}
             className="w-full flex items-center justify-between px-4 md:px-5 landscape:px-2 py-3 md:py-4 landscape:py-1 bg-green-800/30 hover:bg-green-800/40 transition-colors"
           >
-            <span className="font-bold text-xl md:text-2xl landscape:text-xs text-green-200 uppercase tracking-wide">🌐 WHOIS / Registration Info</span>
+            <span className="font-bold text-4xl md:text-3xl landscape:text-sm text-green-200 uppercase tracking-wide">🌐 WHOIS / Registration Info</span>
             {expandedSections.whois ? (
               <ChevronUp className="w-5 h-5 md:w-6 md:h-6 landscape:w-3 landscape:h-3 text-green-300" />
             ) : (
